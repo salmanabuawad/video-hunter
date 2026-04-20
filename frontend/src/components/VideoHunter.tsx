@@ -253,7 +253,7 @@ export function VideoHunter({ project }: Props) {
           <button
             type="submit"
             disabled={busy !== null || !subject.trim()}
-            className="btn btn-primary btn-md inline-flex items-center gap-2"
+            className="btn btn-primary btn-md inline-flex items-center gap-2 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400"
           >
             {busy === 'search' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -268,7 +268,7 @@ export function VideoHunter({ project }: Props) {
           type="button"
           onClick={onNext}
           disabled={busy !== null || !hasMore || rows.length === 0}
-          className="btn btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-40"
+          className="btn btn-primary btn-md inline-flex items-center gap-2 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400 disabled:opacity-60"
           title="Discard un-kept candidates and fetch the next 10"
         >
           {busy === 'next' ? (

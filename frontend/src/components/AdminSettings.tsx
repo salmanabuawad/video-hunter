@@ -191,7 +191,7 @@ export function AdminSettings() {
           <button
             type="submit"
             disabled={saving || (!ytKey.trim() && !fbCookies.trim())}
-            className="btn btn-primary btn-md inline-flex items-center gap-2"
+            className="btn btn-primary btn-md inline-flex items-center gap-2 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Save credentials
