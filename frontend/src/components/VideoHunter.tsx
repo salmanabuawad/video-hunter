@@ -133,8 +133,8 @@ export function VideoHunter({ project }: Props) {
   const columns: ColDef<VideoRow>[] = useMemo(
     () => [
       {
-        headerName: '',
-        width: Math.round(130 * scale),
+        headerName: 'Preview',
+        width: Math.round(110 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
           return r.thumbnail_url ? (
@@ -154,8 +154,8 @@ export function VideoHunter({ project }: Props) {
       {
         field: 'title',
         headerName: 'Title',
-        flex: 2,
-        minWidth: 240,
+        flex: 3,
+        minWidth: 220,
         cellRenderer: (p: ICellRendererParams<VideoRow>) => (
           <a
             href={p.data?.source_url}
@@ -170,28 +170,29 @@ export function VideoHunter({ project }: Props) {
       {
         field: 'channel',
         headerName: 'Channel',
-        width: Math.round(160 * scale),
+        flex: 1,
+        minWidth: 110,
       },
       {
         field: 'duration_sec',
         headerName: 'Duration',
-        width: Math.round(110 * scale),
+        width: Math.round(85 * scale),
         valueFormatter: (p) => fmtDuration(p.value as number),
       },
       {
         field: 'view_count',
         headerName: 'Views',
-        width: Math.round(100 * scale),
+        width: Math.round(80 * scale),
         valueFormatter: (p) => fmtCount(p.value as number),
       },
       {
         field: 'provider',
         headerName: 'Source',
-        width: Math.round(110 * scale),
+        width: Math.round(90 * scale),
       },
       {
         headerName: 'Decision',
-        width: Math.round(200 * scale),
+        width: Math.round(170 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
           return (
@@ -230,7 +231,7 @@ export function VideoHunter({ project }: Props) {
       },
       {
         headerName: 'Download',
-        width: Math.round(170 * scale),
+        width: Math.round(150 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
           const cached = r.has_local_file;
@@ -335,7 +336,7 @@ export function VideoHunter({ project }: Props) {
               rowData={rows}
               columnDefs={columns}
               rowHeight={88}
-              headerHeight={40}
+              headerHeight={48}
               getRowId={(p) => String(p.data.id)}
               noRowsOverlayComponent={() => (
                 <div className="text-theme-text-muted italic">
@@ -361,7 +362,7 @@ export function VideoHunter({ project }: Props) {
               rowData={kept}
               columnDefs={columns}
               rowHeight={88}
-              headerHeight={40}
+              headerHeight={48}
               getRowId={(p) => String(p.data.id)}
               noRowsOverlayComponent={() => (
                 <div className="text-theme-text-muted italic">
