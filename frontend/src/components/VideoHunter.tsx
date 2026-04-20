@@ -271,19 +271,19 @@ export function VideoHunter({ project }: Props) {
         </h2>
       </div>
 
-      <div className="px-4 py-3 flex flex-wrap items-center gap-3 bg-white border-b border-gray-200">
-        <form onSubmit={runSearch} className="flex items-center gap-2 flex-wrap">
+      <div className="px-4 py-3 flex items-center gap-3 bg-white border-b border-gray-200 overflow-x-auto">
+        <form onSubmit={runSearch} className="flex items-center gap-2 flex-nowrap shrink-0">
           <input
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Subject to search for…"
-            className="input-base w-72"
+            className="input-base !w-72 shrink-0"
             disabled={busy !== null}
           />
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value as 'youtube' | 'facebook')}
-            className="input-base w-40"
+            className="input-base !w-40 shrink-0"
             disabled={busy !== null}
           >
             <option value="youtube">YouTube</option>
@@ -292,7 +292,7 @@ export function VideoHunter({ project }: Props) {
           <button
             type="submit"
             disabled={busy !== null || !subject.trim()}
-            className="btn btn-primary btn-md inline-flex items-center gap-2 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400"
+            className="btn btn-primary btn-md inline-flex items-center gap-2 shrink-0 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400"
           >
             {busy === 'search' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -307,7 +307,7 @@ export function VideoHunter({ project }: Props) {
           type="button"
           onClick={onNext}
           disabled={busy !== null || !hasMore || rows.length === 0}
-          className="btn btn-primary btn-md inline-flex items-center gap-2 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400 disabled:opacity-60"
+          className="btn btn-primary btn-md inline-flex items-center gap-2 shrink-0 !bg-blue-600 !text-white hover:!bg-blue-700 disabled:!bg-gray-400 disabled:opacity-60"
           title="Discard un-kept candidates and fetch the next 10"
         >
           {busy === 'next' ? (
