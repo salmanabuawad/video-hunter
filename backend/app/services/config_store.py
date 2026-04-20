@@ -9,6 +9,8 @@ from app.models import AppConfig
 
 KEY_YOUTUBE_API_KEY = "youtube_api_key"
 KEY_FACEBOOK_COOKIES = "facebook_cookies"
+KEY_FACEBOOK_EMAIL = "facebook_email"
+KEY_FACEBOOK_PASSWORD = "facebook_password"
 
 
 def _get(key: str) -> str:
@@ -45,3 +47,19 @@ def facebook_cookies() -> str:
 
 def set_facebook_cookies(value: str) -> None:
     _set(KEY_FACEBOOK_COOKIES, value.strip())
+
+
+def facebook_email() -> str:
+    return _get(KEY_FACEBOOK_EMAIL)
+
+
+def set_facebook_email(value: str) -> None:
+    _set(KEY_FACEBOOK_EMAIL, value.strip())
+
+
+def facebook_password() -> str:
+    return _get(KEY_FACEBOOK_PASSWORD)
+
+
+def set_facebook_password(value: str) -> None:
+    _set(KEY_FACEBOOK_PASSWORD, value.strip())

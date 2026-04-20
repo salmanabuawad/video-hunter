@@ -85,7 +85,12 @@ export const api = {
 
   adminConfigStatus: () => request<AppConfigStatus>('/api/admin/config/status'),
 
-  saveAdminConfig: (body: { youtube_api_key?: string; facebook_cookies?: string }) =>
+  saveAdminConfig: (body: {
+    youtube_api_key?: string;
+    facebook_cookies?: string;
+    facebook_email?: string;
+    facebook_password?: string;
+  }) =>
     request<AppConfigStatus>('/api/admin/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

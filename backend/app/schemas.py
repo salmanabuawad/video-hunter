@@ -77,8 +77,13 @@ class SearchBatchOut(BaseModel):
 class AppConfigIn(BaseModel):
     youtube_api_key: Optional[str] = None
     facebook_cookies: Optional[str] = None
+    facebook_email: Optional[str] = None
+    facebook_password: Optional[str] = None
 
 
 class AppConfigStatus(BaseModel):
     youtube_configured: bool
-    facebook_configured: bool
+    facebook_configured: bool  # cookies present
+    facebook_email_configured: bool = False
+    facebook_password_configured: bool = False
+    facebook_email: str = ""  # non-secret; echoed back so the operator sees which account is wired

@@ -191,10 +191,23 @@ export function VideoHunter({ project }: Props) {
       },
       {
         headerName: 'Download',
-        width: Math.round(140 * scale),
+        width: Math.round(170 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
           const cached = r.has_local_file;
+          // Stub candidates carry synthetic IDs that don't exist on the
+          // provider — yt-dlp will always 404. Suppress the button so we
+          // don't offer a broken action.
+          const isStub =
+            /^stub\d/i.test(r.provider_video_id) ||
+            (r.provider === 'facebook' && r.provider_video_id.length > 15);
+          if (isStub && !cached) {
+            return (
+              <span className="text-xs text-theme-text-muted italic h-full inline-flex items-center">
+                stub — paste a real API key
+              </span>
+            );
+          }
           return (
             <a
               href={downloadUrl(r.id)}
@@ -240,7 +253,7 @@ export function VideoHunter({ project }: Props) {
           <button
             type="submit"
             disabled={busy !== null || !subject.trim()}
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn btn-primary btn-md inline-flex items-center gap-2"
           >
             {busy === 'search' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -255,7 +268,7 @@ export function VideoHunter({ project }: Props) {
           type="button"
           onClick={onNext}
           disabled={busy !== null || !hasMore || rows.length === 0}
-          className="btn-primary inline-flex items-center gap-2 disabled:opacity-40"
+          className="btn btn-primary btn-md inline-flex items-center gap-2 disabled:opacity-40"
           title="Discard un-kept candidates and fetch the next 10"
         >
           {busy === 'next' ? (

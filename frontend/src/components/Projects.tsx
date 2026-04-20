@@ -127,7 +127,7 @@ export function Projects({ onOpenProject }: Props) {
           />
           <button
             type="submit"
-            className="btn-primary inline-flex items-center gap-2"
+            className="btn btn-primary btn-md inline-flex items-center gap-2"
             disabled={creating || !newName.trim()}
           >
             {creating ? (

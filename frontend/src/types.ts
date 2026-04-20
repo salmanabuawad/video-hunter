@@ -46,4 +46,7 @@ export interface SearchBatch {
 export interface AppConfigStatus {
   youtube_configured: boolean;
   facebook_configured: boolean;
+  facebook_email_configured: boolean;
+  facebook_password_configured: boolean;
+  facebook_email: string;
 }
