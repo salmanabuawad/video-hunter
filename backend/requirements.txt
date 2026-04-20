@@ -11,3 +11,4 @@ bcrypt==4.2.0
 httpx==0.28.1
 yt-dlp==2024.10.22
 beautifulsoup4==4.12.3
+playwright==1.48.0

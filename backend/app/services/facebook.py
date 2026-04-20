@@ -1,31 +1,36 @@
-"""Facebook video search via a user-supplied session cookie.
+"""Facebook video search via a logged-in session, driven by Playwright.
 
-Facebook has no public keyword search API for videos. The operator pastes the
-raw Cookie header from a logged-in session via Settings; we drive
-facebook.com/search/videos/?q=... over HTTPS and extract embedded video objects
-from the returned HTML shell.
+Facebook's search page is a React shell — cookie-only curl/httpx approaches hit
+HTTP 400 on mobile or get an empty HTML shell on desktop. Playwright launches
+headless Chromium, loads the session cookies, renders the page, waits for the
+async GraphQL hydration, then scrapes the rendered DOM.
 
-This is fragile — Facebook regularly changes markup and may challenge the
-session or ban the account. When it breaks, paste fresh cookies and we'll try
-again. When no cookies are configured, returns a 10-entry stub so the rest of
-the pipeline is testable.
+Heavier than httpx (launches a browser per query), but this is the only path
+that survives long enough to be useful. If Chromium or Playwright isn't
+installed, or any step errors out, we fall back to the stub so the rest of the
+pipeline still works.
 """
 
 from __future__ import annotations
 
 import logging
-import re
+import os
 import subprocess
+import tempfile
 from typing import Any
 from urllib.parse import quote
-
-import httpx
 
 from app.services.config_store import facebook_cookies
 
 logger = logging.getLogger(__name__)
 
 PAGE_SIZE = 10
+
+_DESKTOP_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+)
+
 _FB_SEARCH_URL = "https://www.facebook.com/search/videos/?q={q}"
 
 
@@ -37,59 +42,130 @@ def search(query: str, page_token: str = "") -> tuple[list[dict[str, Any]], str]
     if is_stub_mode():
         return _stub_search(query, page_token)
     try:
-        return _scrape_search(query, page_token)
+        return _scrape_search_playwright(query, page_token)
     except Exception as e:
-        logger.exception("facebook scrape failed; returning stub batch")
+        logger.exception("facebook playwright scrape failed; returning stub batch")
         stub, _ = _stub_search(query, page_token)
         for r in stub:
             r["description"] = f"[Facebook scrape failed: {e}] {r['description']}"
         return stub, ""
 
 
-def _scrape_search(query: str, page_token: str) -> tuple[list[dict[str, Any]], str]:
-    cookies_header = facebook_cookies()
-    url = _FB_SEARCH_URL.format(q=quote(query))
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/128.0 Safari/537.36"
-        ),
-        "Cookie": cookies_header,
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-    with httpx.Client(follow_redirects=True, timeout=30, headers=headers) as c:
-        r = c.get(url)
-    if r.status_code == 302 or "login.php" in r.text[:2000]:
-        raise RuntimeError(
-            "Facebook redirected to login — cookies are missing/expired. "
-            "Paste fresh cookies in Settings."
+def _parse_cookie_header(header: str) -> list[dict[str, Any]]:
+    """Split 'a=1; b=2' into Playwright cookie dicts."""
+    out: list[dict[str, Any]] = []
+    for pair in (header or "").split(";"):
+        if "=" not in pair:
+            continue
+        name, value = pair.strip().split("=", 1)
+        if not name:
+            continue
+        out.append(
+            {
+                "name": name.strip(),
+                "value": value.strip(),
+                "domain": ".facebook.com",
+                "path": "/",
+                "secure": True,
+                "httpOnly": False,
+                "sameSite": "None",
+            }
         )
-    r.raise_for_status()
-    html = r.text
-    results = _parse_video_objects(html, query)
-    # Facebook's search response is infinite-scroll GraphQL under the hood;
-    # the HTML shell only gives us the first slate of results. Treat each
-    # call as one page; no true next-token yet. Honest limitation.
+    return out
+
+
+def _scrape_search_playwright(
+    query: str, page_token: str
+) -> tuple[list[dict[str, Any]], str]:
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+
+    cookies = _parse_cookie_header(facebook_cookies())
+    if not cookies:
+        raise RuntimeError("No Facebook cookies configured")
+
+    url = _FB_SEARCH_URL.format(q=quote(query))
+    results: list[dict[str, Any]] = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
+        try:
+            context = browser.new_context(
+                user_agent=_DESKTOP_UA,
+                viewport={"width": 1280, "height": 900},
+                locale="en-US",
+            )
+            context.add_cookies(cookies)
+            page = context.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+            # If FB redirected us to login, cookies have been revoked.
+            if "/login" in page.url or "login.php" in page.url:
+                raise RuntimeError(
+                    "Facebook redirected to login — cookies are expired/revoked. "
+                    "Paste fresh cookies in Settings."
+                )
+            # Wait for at least one video card to hydrate.
+            try:
+                page.wait_for_selector('a[href*="/watch/?v="]', timeout=25_000)
+            except PWTimeout:
+                # Some accounts render /videos/<id> links instead of /watch/?v=
+                try:
+                    page.wait_for_selector('a[href*="/videos/"]', timeout=5_000)
+                except PWTimeout:
+                    logger.warning("playwright: no video anchors appeared for %s", query)
+            # Let a couple more hydration ticks pass.
+            page.wait_for_timeout(1500)
+            raw = page.evaluate(_EXTRACT_JS)
+            results = _normalize_raw(raw)
+        finally:
+            browser.close()
+
     start = int(page_token or "0")
     slice_ = results[start : start + PAGE_SIZE]
     next_tok = str(start + PAGE_SIZE) if start + PAGE_SIZE < len(results) else ""
     return slice_, next_tok
 
 
-_VIDEO_ID_RE = re.compile(r'"video_id"\s*:\s*"(\d+)"')
-_TITLE_RE = re.compile(r'"video_title"\s*:\s*"([^"]{3,200})"')
+_EXTRACT_JS = """
+() => {
+  const items = [];
+  const seen = new Set();
+  const rx = /\\/(?:watch\\/?\\?v=|videos\\/)(\\d{6,})/;
+  document.querySelectorAll('a[href*="/watch/?v="], a[href*="/videos/"]').forEach(a => {
+    const href = a.href || '';
+    const m = href.match(rx);
+    if (!m) return;
+    const vid = m[1];
+    if (seen.has(vid)) return;
+    seen.add(vid);
+
+    // Walk up to the enclosing card-ish container to find title + thumbnail.
+    let container = a;
+    for (let i = 0; i < 6 && container.parentElement; i++) {
+      container = container.parentElement;
+      if (container.querySelector('img')) break;
+    }
+    const aria = a.getAttribute('aria-label') || '';
+    const spanText = (a.innerText || '').trim();
+    const fallbackTitle = (container.querySelector('span[dir="auto"]')?.innerText || '').trim();
+    const title = aria || spanText || fallbackTitle || '';
+    const thumb = container.querySelector('img')?.src || '';
+    items.push({ vid, href, title: title.slice(0, 220), thumb });
+  });
+  return items;
+}
+"""
 
 
-def _parse_video_objects(html: str, query: str) -> list[dict[str, Any]]:
-    ids = _VIDEO_ID_RE.findall(html)
-    titles = _TITLE_RE.findall(html)
-    seen: set[str] = set()
+def _normalize_raw(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for i, vid in enumerate(ids):
-        if vid in seen:
+    for r in raw or []:
+        vid = str(r.get("vid") or "").strip()
+        if not vid:
             continue
-        seen.add(vid)
-        title = titles[i] if i < len(titles) else f"Facebook result #{i + 1} for '{query}'"
+        title = (r.get("title") or "").strip() or f"Facebook video {vid}"
         out.append(
             {
                 "provider_video_id": vid,
@@ -99,7 +175,7 @@ def _parse_video_objects(html: str, query: str) -> list[dict[str, Any]]:
                 "duration_sec": 0.0,
                 "view_count": 0,
                 "published_at": "",
-                "thumbnail_url": "",
+                "thumbnail_url": r.get("thumb") or "",
                 "source_url": f"https://www.facebook.com/watch/?v={vid}",
             }
         )
@@ -107,17 +183,12 @@ def _parse_video_objects(html: str, query: str) -> list[dict[str, Any]]:
 
 
 def download(source_url: str, out_path: str) -> None:
-    """yt-dlp supports Facebook watch URLs when supplied with the user's cookies."""
-    import os
-    import tempfile
-
+    """yt-dlp with the user's cookies converted to Netscape format."""
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     cookies = facebook_cookies()
     cmd = ["yt-dlp", "--no-playlist", "--no-part", "-o", out_path]
     cleanup: list[str] = []
     if cookies:
-        # yt-dlp wants cookies in Netscape format; pasted header is Key=Value;
-        # Key=Value; — convert on the fly.
         tf = tempfile.NamedTemporaryFile(
             mode="w", suffix=".txt", delete=False, prefix="fbcookie_"
         )
