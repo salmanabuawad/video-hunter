@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import sys
 from typing import Any
 
 import httpx
@@ -111,8 +112,10 @@ def download(source_url: str, out_path: str) -> None:
     import os
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    # systemd PATH doesn't include .venv/bin, so invoke yt_dlp via the venv's
+    # own python (`sys.executable`) rather than relying on a bare `yt-dlp`.
     cmd = [
-        "yt-dlp",
+        sys.executable, "-m", "yt_dlp",
         "-f",
         "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best",
         "--merge-output-format",
@@ -124,7 +127,11 @@ def download(source_url: str, out_path: str) -> None:
         source_url,
     ]
     logger.info("yt-dlp %s -> %s", source_url, out_path)
-    subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or b"").decode("utf-8", errors="replace")[:2000]
+        raise RuntimeError(f"yt-dlp failed ({e.returncode}): {stderr}") from e
 
 
 # ──────────────────────────── stub ────────────────────────────

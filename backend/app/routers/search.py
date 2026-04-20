@@ -178,7 +178,13 @@ def start_search(
         search.page_token_next = ""
         search.total_fetched = 0
 
-    items, next_token = adapter.search(query, "")
+    try:
+        items, next_token = adapter.search(query, "")
+    except RuntimeError as e:
+        # Scraper failed (login wall, Facebook layout change, etc.). Surface
+        # the real reason via 502 so the UI can banner it — never fake stub
+        # rows to hide a failure.
+        raise HTTPException(status_code=502, detail=str(e)) from e
     search.page_token_current = ""
     search.page_token_next = next_token
     search.total_fetched = len(items)
@@ -224,7 +230,10 @@ def next_batch(
     # Purge unkept candidates from the previous batch first (files + rows).
     _purge_non_kept(session, search)
     adapter = _provider_for(search.provider)
-    items, next_token = adapter.search(search.query, search.page_token_next)
+    try:
+        items, next_token = adapter.search(search.query, search.page_token_next)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
     search.page_token_current = search.page_token_next
     search.page_token_next = next_token
     search.total_fetched += len(items)

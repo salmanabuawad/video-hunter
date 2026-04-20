@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 from typing import Any
 
@@ -36,17 +37,21 @@ def is_stub_mode() -> bool:
 
 def search(query: str, page_token: str = "") -> tuple[list[dict[str, Any]], str]:
     """Return (batch, next_page_token). Pagination is local: we fetch a pool of
-    results once and the router walks through it PAGE_SIZE at a time."""
+    results once and the router walks through it PAGE_SIZE at a time.
+
+    On scrape failure we raise RuntimeError with a human-readable reason. We
+    deliberately do NOT hide failures behind fake stub rows — that bug made
+    operators think results were live when the scraper had actually died.
+    The router turns this exception into an HTTP 502 that the UI surfaces
+    as a banner on an otherwise-empty grid.
+    """
     if is_stub_mode():
         return _stub_search(query, page_token)
     try:
         return _live_search(query, page_token)
     except Exception as e:
-        logger.exception("facebook live scrape failed; returning stub batch")
-        stub, _ = _stub_search(query, page_token)
-        for r in stub:
-            r["description"] = f"[Facebook scrape failed: {e}] {r['description']}"
-        return stub, ""
+        logger.exception("facebook live scrape failed")
+        raise RuntimeError(f"Facebook scrape failed: {e}") from e
 
 
 def _live_search(query: str, page_token: str) -> tuple[list[dict[str, Any]], str]:
@@ -120,10 +125,17 @@ def _to_row(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def download(source_url: str, out_path: str) -> None:
-    """yt-dlp with the user's cookies converted to Netscape format."""
+    """yt-dlp with the user's cookies converted to Netscape format.
+
+    Invokes yt_dlp via `sys.executable -m` so the systemd service's PATH
+    doesn't need to include the venv's bin dir.
+    """
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     cookies = facebook_cookies()
-    cmd = ["yt-dlp", "--no-playlist", "--no-part", "-o", out_path]
+    cmd: list[str] = [
+        sys.executable, "-m", "yt_dlp",
+        "--no-playlist", "--no-part", "-o", out_path,
+    ]
     cleanup: list[str] = []
     if cookies:
         tf = tempfile.NamedTemporaryFile(
@@ -143,6 +155,9 @@ def download(source_url: str, out_path: str) -> None:
     cmd.append(source_url)
     try:
         subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or b"").decode("utf-8", errors="replace")[:2000]
+        raise RuntimeError(f"yt-dlp failed ({e.returncode}): {stderr}") from e
     finally:
         for p in cleanup:
             try:
