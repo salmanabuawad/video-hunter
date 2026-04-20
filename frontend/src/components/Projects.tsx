@@ -116,7 +116,7 @@ export function Projects({ onOpenProject }: Props) {
         <h2 className="page-header-title">Projects</h2>
       </div>
 
-      <div className="action-bar px-4 py-3 flex items-center gap-3 flex-wrap bg-white border-b border-gray-200">
+      <div className="px-4 py-3 flex items-center gap-3 flex-wrap bg-white border-b border-gray-200">
         <form onSubmit={onCreate} className="flex items-center gap-2">
           <input
             value={newName}

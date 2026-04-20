@@ -232,7 +232,7 @@ export function VideoHunter({ project }: Props) {
         </h2>
       </div>
 
-      <div className="action-bar px-4 py-3 flex flex-wrap items-center gap-3 bg-white border-b border-gray-200">
+      <div className="px-4 py-3 flex flex-wrap items-center gap-3 bg-white border-b border-gray-200">
         <form onSubmit={runSearch} className="flex items-center gap-2 flex-wrap">
           <input
             value={subject}
