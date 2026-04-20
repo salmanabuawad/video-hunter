@@ -265,12 +265,6 @@ export function VideoHunter({ project }: Props) {
 
   return (
     <div className="page-fill flex-1 flex flex-col min-h-0">
-      <div className="page-header px-4 py-3">
-        <h2 className="page-header-title">
-          Hunt · <span className="opacity-80">{project.name}</span>
-        </h2>
-      </div>
-
       <div className="px-4 py-3 flex items-center gap-3 bg-white border-b border-gray-200 overflow-x-auto">
         <form onSubmit={runSearch} className="flex items-center gap-2 flex-nowrap shrink-0">
           <input
