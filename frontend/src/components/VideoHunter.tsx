@@ -323,9 +323,9 @@ export function VideoHunter({ project }: Props) {
         {/* ── Candidates (unreviewed + rejected) ────────────────────── */}
         <div className="flex-[3] min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-1 py-1">
-            <h3 className="text-sm font-semibold text-theme-text-primary">
+            <h3 className="text-lg font-bold text-theme-text-primary">
               Candidates
-              <span className="ml-2 text-xs text-theme-text-muted font-normal">
+              <span className="ml-2 text-sm text-theme-text-muted font-normal">
                 ({rows.length}) — Reject or take no action, then click Next to discard.
               </span>
             </h3>
@@ -349,9 +349,9 @@ export function VideoHunter({ project }: Props) {
         {/* ── Kept (survives Next + persists across searches) ───────── */}
         <div className="flex-[2] min-h-[180px] flex flex-col">
           <div className="flex items-center justify-between px-1 py-1">
-            <h3 className="text-sm font-semibold text-theme-text-primary">
+            <h3 className="text-lg font-bold text-theme-text-primary">
               Kept
-              <span className="ml-2 text-xs text-theme-text-muted font-normal">
+              <span className="ml-2 text-sm text-theme-text-muted font-normal">
                 ({kept.length}) — survives Next. Click Keep again to move back to Candidates.
               </span>
             </h3>
