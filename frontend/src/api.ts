@@ -74,7 +74,7 @@ export const api = {
   nextBatch: (projectId: number) =>
     request<SearchBatch>(`/api/projects/${projectId}/search/next`, { method: 'POST' }),
 
-  decideVideo: (videoId: number, decision: 'keep' | 'reject' | 'candidate') =>
+  decideVideo: (videoId: number, decision: 'keep' | 'rejected' | 'candidate') =>
     request<VideoRow>(`/api/videos/${videoId}/decide`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

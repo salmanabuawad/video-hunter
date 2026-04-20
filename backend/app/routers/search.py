@@ -110,11 +110,12 @@ def _download_in_background(video_id: int) -> None:
 
 
 def _purge_non_kept(session: Session, search: Search) -> int:
-    """Delete candidates from the most recent batch that the user did not mark
-    as 'keep'. Returns how many rows were purged."""
+    """Delete every row from the most recent batch that is NOT marked 'keep'
+    — that includes 'candidate' (unreviewed) and 'rejected' / legacy 'reject'.
+    Returns how many rows were purged."""
     rows = session.exec(
         select(Video).where(
-            Video.search_id == search.id, Video.state == "candidate"
+            Video.search_id == search.id, Video.state != "keep"
         )
     ).all()
     purged = 0

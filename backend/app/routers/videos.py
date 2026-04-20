@@ -66,9 +66,16 @@ def decide(
     user: User = Depends(get_current_user),
 ):
     v = _assert_video_access(session, video_id, user)
-    decision = (body.decision or "").strip().lower()
-    if decision not in ("keep", "reject", "candidate"):
-        raise HTTPException(status_code=400, detail="decision must be keep|reject|candidate")
+    raw = (body.decision or "").strip().lower()
+    # Canonical stored values: keep | rejected | candidate. Accept "reject"
+    # as an alias so an older frontend bundle keeps working.
+    alias = {"reject": "rejected"}
+    decision = alias.get(raw, raw)
+    if decision not in ("keep", "rejected", "candidate"):
+        raise HTTPException(
+            status_code=400,
+            detail="decision must be one of keep|rejected|candidate (reject accepted as alias)",
+        )
     v.state = decision
     v.decided_at = datetime.utcnow() if decision != "candidate" else None
     session.add(v)

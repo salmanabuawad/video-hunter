@@ -77,15 +77,15 @@ export function VideoHunter({ project }: Props) {
     }
   }
 
-  async function setDecision(row: VideoRow, decision: 'keep' | 'reject' | 'candidate') {
+  async function setDecision(row: VideoRow, decision: 'keep' | 'rejected' | 'candidate') {
     const prev = row.state;
-    // Optimistic
+    // Optimistic UI: flip the row's state locally first so the button colour
+    // switches without waiting for the network round-trip.
     setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, state: decision } : r)));
     try {
       const updated = await api.decideVideo(row.id, decision);
       setRows((rs) => rs.map((r) => (r.id === row.id ? updated : r)));
     } catch (e: unknown) {
-      // Revert
       setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, state: prev } : r)));
       setError(e instanceof Error ? e.message : 'Decision failed');
     }
@@ -174,7 +174,7 @@ export function VideoHunter({ project }: Props) {
               <button
                 type="button"
                 onClick={() =>
-                  setDecision(r, r.state === 'rejected' ? 'candidate' : 'reject')
+                  setDecision(r, r.state === 'rejected' ? 'candidate' : 'rejected')
                 }
                 className={`px-2 py-1 rounded text-sm inline-flex items-center gap-1 border ${
                   r.state === 'rejected'
