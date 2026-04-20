@@ -130,8 +130,7 @@ export function VideoHunter({ project }: Props) {
     }
   }
 
-  const columns: ColDef<VideoRow>[] = useMemo(
-    () => [
+  const makeColumns = (mode: 'candidates' | 'kept'): ColDef<VideoRow>[] => [
       {
         headerName: 'Preview',
         width: Math.round(110 * scale),
@@ -191,39 +190,37 @@ export function VideoHunter({ project }: Props) {
         width: Math.round(90 * scale),
       },
       {
-        headerName: 'Decision',
-        width: Math.round(170 * scale),
+        // Candidates grid: only a Keep button — clicking it moves the row down.
+        // Kept grid:       only a Delete button — clicking it removes the row
+        //                  from Kept (moves it back up as a rejected candidate
+        //                  so the next click on Next will purge it cleanly).
+        headerName: mode === 'candidates' ? 'Keep' : 'Delete',
+        width: Math.round(120 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
+          if (mode === 'candidates') {
+            return (
+              <div className="flex items-center h-full">
+                <button
+                  type="button"
+                  onClick={() => setDecision(r, 'keep')}
+                  className="px-2 py-1 rounded text-sm inline-flex items-center gap-1 border bg-white text-green-700 border-green-600 hover:bg-green-50"
+                  title="Keep — moves the row down to the Kept grid"
+                >
+                  <CheckCircle2 className="h-4 w-4" /> Keep
+                </button>
+              </div>
+            );
+          }
           return (
-            <div className="flex items-center gap-1 h-full">
+            <div className="flex items-center h-full">
               <button
                 type="button"
-                onClick={() =>
-                  setDecision(r, r.state === 'keep' ? 'candidate' : 'keep')
-                }
-                className={`px-2 py-1 rounded text-sm inline-flex items-center gap-1 border ${
-                  r.state === 'keep'
-                    ? 'bg-green-600 text-white border-green-600'
-                    : 'bg-white text-green-700 border-green-600 hover:bg-green-50'
-                }`}
-                title="Keep (survives the Next button)"
+                onClick={() => setDecision(r, 'rejected')}
+                className="px-2 py-1 rounded text-sm inline-flex items-center gap-1 border bg-white text-red-700 border-red-600 hover:bg-red-50"
+                title="Delete from Kept"
               >
-                <CheckCircle2 className="h-4 w-4" /> Keep
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setDecision(r, r.state === 'rejected' ? 'candidate' : 'rejected')
-                }
-                className={`px-2 py-1 rounded text-sm inline-flex items-center gap-1 border ${
-                  r.state === 'rejected'
-                    ? 'bg-red-600 text-white border-red-600'
-                    : 'bg-white text-red-700 border-red-600 hover:bg-red-50'
-                }`}
-                title="Reject"
-              >
-                <XCircle className="h-4 w-4" />
+                <XCircle className="h-4 w-4" /> Delete
               </button>
             </div>
           );
@@ -260,9 +257,10 @@ export function VideoHunter({ project }: Props) {
           );
         },
       },
-    ],
-    [scale],
-  );
+    ];
+
+  const candidateColumns = useMemo(() => makeColumns('candidates'), [scale]);
+  const keptColumns = useMemo(() => makeColumns('kept'), [scale]);
 
   return (
     <div className="page-fill flex-1 flex flex-col min-h-0">
@@ -327,14 +325,14 @@ export function VideoHunter({ project }: Props) {
             <h3 className="text-lg font-bold text-theme-text-primary">
               Candidates
               <span className="ml-2 text-sm text-theme-text-muted font-normal">
-                ({rows.length}) — Reject or take no action, then click Next to discard.
+                ({rows.length}) — click Keep to move a row down; Next discards the rest.
               </span>
             </h3>
           </div>
           <div className="ag-theme-alpine flex-1 min-h-0 w-full rounded-lg border border-gray-200">
             <AgGridReact<VideoRow>
               rowData={rows}
-              columnDefs={columns}
+              columnDefs={candidateColumns}
               rowHeight={88}
               headerHeight={48}
               getRowId={(p) => String(p.data.id)}
@@ -353,14 +351,14 @@ export function VideoHunter({ project }: Props) {
             <h3 className="text-lg font-bold text-theme-text-primary">
               Kept
               <span className="ml-2 text-sm text-theme-text-muted font-normal">
-                ({kept.length}) — survives Next. Click Keep again to move back to Candidates.
+                ({kept.length}) — survives Next. Click Delete to remove.
               </span>
             </h3>
           </div>
           <div className="ag-theme-alpine flex-1 min-h-0 w-full rounded-lg border border-green-300 bg-green-50/30">
             <AgGridReact<VideoRow>
               rowData={kept}
-              columnDefs={columns}
+              columnDefs={keptColumns}
               rowHeight={88}
               headerHeight={48}
               getRowId={(p) => String(p.data.id)}
