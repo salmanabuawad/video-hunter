@@ -1,0 +1,19 @@
+[Unit]
+Description=Video Hunter (FastAPI / Uvicorn)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/video_hunter
+EnvironmentFile=/opt/video_hunter/.env
+ExecStart=/opt/video_hunter/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8030 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
