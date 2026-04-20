@@ -190,8 +190,8 @@ def start_search(
     session.commit()
 
     saved = _persist_batch(session, search, items)
-    for v in saved:
-        background_tasks.add_task(_download_in_background, v.id)
+    # Downloads happen on-demand when the user clicks Download on a row, not
+    # automatically for every candidate.
 
     return SearchBatchOut(
         search_id=search.id,
@@ -235,8 +235,7 @@ def next_batch(
     session.commit()
 
     saved = _persist_batch(session, search, items)
-    for v in saved:
-        background_tasks.add_task(_download_in_background, v.id)
+    # Downloads happen on-demand when the user clicks Download on a row.
 
     return SearchBatchOut(
         search_id=search.id,

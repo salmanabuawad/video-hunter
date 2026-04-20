@@ -44,35 +44,7 @@ export function VideoHunter({ project }: Props) {
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pollTick, setPollTick] = useState(0);
-
   const scale = getFontSizeWidthMultiplier();
-
-  /* Poll for download completion so the Download link activates without a manual refresh. */
-  useEffect(() => {
-    if (rows.length === 0) return;
-    const pending = rows.some((r) => !r.has_local_file);
-    if (!pending) return;
-    const t = setTimeout(() => setPollTick((v) => v + 1), 2500);
-    return () => clearTimeout(t);
-  }, [rows, pollTick]);
-
-  useEffect(() => {
-    if (pollTick === 0 || rows.length === 0) return;
-    // Refresh any row whose file isn't on disk yet.
-    const pending = rows.filter((r) => !r.has_local_file);
-    if (!pending.length) return;
-    Promise.all(
-      pending.map((r) =>
-        api
-          .decideVideo(r.id, r.state === 'candidate' ? 'candidate' : (r.state as 'keep' | 'reject'))
-          .catch(() => null),
-      ),
-    ).then((refreshed) => {
-      const byId = new Map(refreshed.filter(Boolean).map((v) => [v!.id, v!]));
-      setRows((prev) => prev.map((r) => byId.get(r.id) || r));
-    });
-  }, [pollTick]);
 
   async function runSearch(e?: React.FormEvent) {
     e?.preventDefault();
@@ -222,20 +194,15 @@ export function VideoHunter({ project }: Props) {
         width: Math.round(140 * scale),
         cellRenderer: (p: ICellRendererParams<VideoRow>) => {
           const r = p.data!;
-          if (!r.has_local_file) {
-            return (
-              <span className="text-xs text-theme-text-muted inline-flex items-center gap-1 h-full">
-                <Loader2 className="h-3 w-3 animate-spin" /> downloading…
-              </span>
-            );
-          }
+          const cached = r.has_local_file;
           return (
             <a
               href={downloadUrl(r.id)}
               download
               className="inline-flex items-center gap-1 text-theme-tab-active hover:underline text-sm"
+              title={cached ? 'Stream the cached file' : 'Fetches the file from the provider on demand (may take 10–60s)'}
             >
-              <Download className="h-4 w-4" /> Download
+              <Download className="h-4 w-4" /> {cached ? 'Download' : 'Fetch + download'}
             </a>
           );
         },

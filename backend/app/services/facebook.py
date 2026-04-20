@@ -110,13 +110,15 @@ def _scrape_search_playwright(
             try:
                 page.wait_for_selector('a[href*="/watch/?v="]', timeout=25_000)
             except PWTimeout:
-                # Some accounts render /videos/<id> links instead of /watch/?v=
                 try:
                     page.wait_for_selector('a[href*="/videos/"]', timeout=5_000)
                 except PWTimeout:
                     logger.warning("playwright: no video anchors appeared for %s", query)
-            # Let a couple more hydration ticks pass.
-            page.wait_for_timeout(1500)
+            # Scroll a few times to trigger infinite-scroll hydration of more
+            # results — one page typically has ~4–6 initially, more after scroll.
+            for _ in range(6):
+                page.mouse.wheel(0, 1800)
+                page.wait_for_timeout(700)
             raw = page.evaluate(_EXTRACT_JS)
             results = _normalize_raw(raw)
         finally:
@@ -128,12 +130,15 @@ def _scrape_search_playwright(
     return slice_, next_tok
 
 
-_EXTRACT_JS = """
+_EXTRACT_JS = r"""
 () => {
   const items = [];
   const seen = new Set();
-  const rx = /\\/(?:watch\\/?\\?v=|videos\\/)(\\d{6,})/;
-  document.querySelectorAll('a[href*="/watch/?v="], a[href*="/videos/"]').forEach(a => {
+  const rx = /\/(?:watch\/?\?v=|videos\/)(\d{6,})/;
+  const isDuration = (s) => /^\d{1,3}(:\d{2}){1,2}$/.test((s || '').trim());
+
+  const anchors = document.querySelectorAll('a[href*="/watch/?v="], a[href*="/videos/"]');
+  anchors.forEach(a => {
     const href = a.href || '';
     const m = href.match(rx);
     if (!m) return;
@@ -141,18 +146,38 @@ _EXTRACT_JS = """
     if (seen.has(vid)) return;
     seen.add(vid);
 
-    // Walk up to the enclosing card-ish container to find title + thumbnail.
+    // Walk up to a card-ish container that has both an <img> and some text.
     let container = a;
-    for (let i = 0; i < 6 && container.parentElement; i++) {
+    for (let i = 0; i < 10 && container.parentElement; i++) {
       container = container.parentElement;
-      if (container.querySelector('img')) break;
+      const role = container.getAttribute && container.getAttribute('role');
+      if (role === 'article' || container.tagName === 'ARTICLE') break;
+      if (container.querySelector('img') && container.innerText && container.innerText.length > 40) break;
     }
-    const aria = a.getAttribute('aria-label') || '';
-    const spanText = (a.innerText || '').trim();
-    const fallbackTitle = (container.querySelector('span[dir="auto"]')?.innerText || '').trim();
-    const title = aria || spanText || fallbackTitle || '';
-    const thumb = container.querySelector('img')?.src || '';
-    items.push({ vid, href, title: title.slice(0, 220), thumb });
+
+    // Collect candidate title strings in order of preference:
+    const candidates = [];
+    const aria = a.getAttribute('aria-label');
+    if (aria) candidates.push(aria);
+    candidates.push(...Array.from(container.querySelectorAll('span[dir="auto"]'))
+      .map(s => s.innerText || ''));
+    candidates.push(...Array.from(container.querySelectorAll('[role="link"] span'))
+      .map(s => s.innerText || ''));
+    candidates.push((a.innerText || '').trim());
+
+    let title = '';
+    for (const c of candidates) {
+      const t = (c || '').replace(/\s+/g, ' ').trim();
+      if (!t) continue;
+      if (isDuration(t)) continue;          // skip "18:30" badges
+      if (t.length < 6) continue;           // skip "Watch" / "Follow" chips
+      title = t.slice(0, 220);
+      break;
+    }
+    if (!title) title = `Facebook video ${vid}`;
+
+    const thumbEl = container.querySelector('img[src^="http"]');
+    items.push({ vid, href, title, thumb: thumbEl ? thumbEl.src : '' });
   });
   return items;
 }
