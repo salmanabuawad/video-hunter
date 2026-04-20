@@ -41,10 +41,23 @@ export function VideoHunter({ project }: Props) {
   const [subject, setSubject] = useState(project.subject || '');
   const [provider, setProvider] = useState<'youtube' | 'facebook'>('youtube');
   const [rows, setRows] = useState<VideoRow[]>([]);
+  const [kept, setKept] = useState<VideoRow[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scale = getFontSizeWidthMultiplier();
+
+  // Load the kept pile for this project on mount so the lower grid shows
+  // every video the user has kept across all past searches, not just this
+  // session's keeps.
+  useEffect(() => {
+    api
+      .listKept(project.id)
+      .then(setKept)
+      .catch(() => {
+        /* non-fatal — lower grid stays empty until the user keeps something */
+      });
+  }, [project.id]);
 
   async function runSearch(e?: React.FormEvent) {
     e?.preventDefault();
@@ -78,15 +91,41 @@ export function VideoHunter({ project }: Props) {
   }
 
   async function setDecision(row: VideoRow, decision: 'keep' | 'rejected' | 'candidate') {
-    const prev = row.state;
-    // Optimistic UI: flip the row's state locally first so the button colour
-    // switches without waiting for the network round-trip.
-    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, state: decision } : r)));
+    const wasKept = row.state === 'keep';
+    const willBeKept = decision === 'keep';
+    const optimistic: VideoRow = { ...row, state: decision };
+
+    // Optimistic move between grids:
+    //   - Keep click on a candidate: yank out of top grid, prepend to kept.
+    //   - Un-keep click on a kept row: yank out of kept, push back on top as candidate.
+    //   - Anything else (candidate ↔ rejected): stays in the top grid.
+    if (!wasKept && willBeKept) {
+      setRows((rs) => rs.filter((r) => r.id !== row.id));
+      setKept((ks) => [optimistic, ...ks.filter((k) => k.id !== row.id)]);
+    } else if (wasKept && !willBeKept) {
+      setKept((ks) => ks.filter((k) => k.id !== row.id));
+      setRows((rs) => [...rs.filter((r) => r.id !== row.id), optimistic]);
+    } else {
+      setRows((rs) => rs.map((r) => (r.id === row.id ? optimistic : r)));
+    }
+
     try {
       const updated = await api.decideVideo(row.id, decision);
-      setRows((rs) => rs.map((r) => (r.id === row.id ? updated : r)));
+      // Sync authoritative row into whichever grid it now belongs to.
+      if (updated.state === 'keep') {
+        setKept((ks) => ks.map((k) => (k.id === updated.id ? updated : k)));
+      } else {
+        setRows((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
+      }
     } catch (e: unknown) {
-      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, state: prev } : r)));
+      // Revert: drop from both and re-insert in the original grid with original state.
+      setRows((rs) => rs.filter((r) => r.id !== row.id));
+      setKept((ks) => ks.filter((k) => k.id !== row.id));
+      if (wasKept) {
+        setKept((ks) => [row, ...ks]);
+      } else {
+        setRows((rs) => [...rs, row]);
+      }
       setError(e instanceof Error ? e.message : 'Decision failed');
     }
   }
@@ -286,20 +325,57 @@ export function VideoHunter({ project }: Props) {
         </div>
       )}
 
-      <div className="grid-fill px-4 pb-4 flex-1 min-h-0">
-        <div className="ag-theme-alpine h-full w-full rounded-lg border border-gray-200">
-          <AgGridReact<VideoRow>
-            rowData={rows}
-            columnDefs={columns}
-            rowHeight={88}
-            headerHeight={40}
-            getRowId={(p) => String(p.data.id)}
-            noRowsOverlayComponent={() => (
-              <div className="text-theme-text-muted italic">
-                Enter a subject and click Search.
-              </div>
-            )}
-          />
+      <div className="px-4 pb-4 flex-1 min-h-0 flex flex-col gap-3">
+        {/* ── Candidates (unreviewed + rejected) ────────────────────── */}
+        <div className="flex-[3] min-h-0 flex flex-col">
+          <div className="flex items-center justify-between px-1 py-1">
+            <h3 className="text-sm font-semibold text-theme-text-primary">
+              Candidates
+              <span className="ml-2 text-xs text-theme-text-muted font-normal">
+                ({rows.length}) — Reject or take no action, then click Next to discard.
+              </span>
+            </h3>
+          </div>
+          <div className="ag-theme-alpine flex-1 min-h-0 w-full rounded-lg border border-gray-200">
+            <AgGridReact<VideoRow>
+              rowData={rows}
+              columnDefs={columns}
+              rowHeight={88}
+              headerHeight={40}
+              getRowId={(p) => String(p.data.id)}
+              noRowsOverlayComponent={() => (
+                <div className="text-theme-text-muted italic">
+                  Enter a subject and click Search.
+                </div>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* ── Kept (survives Next + persists across searches) ───────── */}
+        <div className="flex-[2] min-h-[180px] flex flex-col">
+          <div className="flex items-center justify-between px-1 py-1">
+            <h3 className="text-sm font-semibold text-theme-text-primary">
+              Kept
+              <span className="ml-2 text-xs text-theme-text-muted font-normal">
+                ({kept.length}) — survives Next. Click Keep again to move back to Candidates.
+              </span>
+            </h3>
+          </div>
+          <div className="ag-theme-alpine flex-1 min-h-0 w-full rounded-lg border border-green-300 bg-green-50/30">
+            <AgGridReact<VideoRow>
+              rowData={kept}
+              columnDefs={columns}
+              rowHeight={88}
+              headerHeight={40}
+              getRowId={(p) => String(p.data.id)}
+              noRowsOverlayComponent={() => (
+                <div className="text-theme-text-muted italic">
+                  No kept videos yet — click the green Keep button on a candidate.
+                </div>
+              )}
+            />
+          </div>
         </div>
       </div>
     </div>
