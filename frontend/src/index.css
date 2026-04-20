@@ -331,6 +331,24 @@ body {
 .ag-theme-alpine .ag-popup-child { z-index: 1000 !important; }
 .ag-theme-alpine .ag-menu { z-index: 1002 !important; }
 
+/* AG Grid's default header label alignment leaves text stuck to the top of
+   the cell when --ag-header-height is larger than the natural line box.
+   Force the label wrapper to fill the cell and centre its content. */
+.ag-theme-alpine .ag-header-cell,
+.ag-theme-alpine .ag-header-group-cell {
+  display: flex !important;
+  align-items: center !important;
+}
+.ag-theme-alpine .ag-header-cell-label,
+.ag-theme-alpine .ag-header-group-cell-label {
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+.ag-theme-alpine .ag-header-cell-text {
+  line-height: 1.2 !important;
+}
+
 @media (max-width: 640px) {
   .ag-theme-alpine { --ag-font-size: 11px; --ag-row-height: 36px; --ag-header-height: 40px; }
   .ag-theme-alpine .ag-body-viewport { min-height: 120px !important; }
